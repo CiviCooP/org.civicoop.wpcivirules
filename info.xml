@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <extension key="org.civicoop.wpcivirules" type="module">
   <file>wpcivirules</file>
-  <name>CiviCooP WPCiviRules</name>
+  <name>CiviRules for WordPress</name>
   <description>CiviRules actions/triggers that interact with the underlying Wordpress installation.</description>
   <license>AGPL-3.0</license>
   <maintainer>
@@ -11,8 +11,8 @@
   <urls>
     <url desc="Main Extension Page">https://github.com/civicoop/org.civicoop.wpcivirules</url>
     <url desc="CiviRules Extension">https://github.com/civicoop/org.civicoop.civirules</url>
-    <url desc="Maintainer">https://levity.nl</url>
     <url desc="Licensing">http://www.gnu.org/licenses/agpl-3.0.html</url>
+    <url desc="Maintainer">https://levity.nl</url>
   </urls>
   <releaseDate>2016-05-31</releaseDate>
   <version>1.0</version>
@@ -23,9 +23,10 @@
   </compatibility>
   <requires>
     <ext>org.civicoop.civirules</ext>
+    <ext>org.civicoop.civiruleslogger</ext>
   </requires>
   <comments></comments>
   <civix>
-    <namespace>CRM/WPCivi/CiviRules</namespace>
+    <namespace>CRM/WPCiviRules</namespace>
   </civix>
 </extension>

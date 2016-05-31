@@ -114,14 +114,14 @@ function _wpcivirules_civix_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) 
 }
 
 /**
- * @return CRM_Wpcivirules_Upgrader
+ * @return CRM_WPCiviRules_Upgrader
  */
 function _wpcivirules_civix_upgrader() {
-  if (!file_exists(__DIR__.'/CRM/Wpcivirules/Upgrader.php')) {
+  if (!file_exists(__DIR__.'/CRM/WPCiviRules/Upgrader.php')) {
     return NULL;
   }
   else {
-    return CRM_Wpcivirules_Upgrader_Base::instance();
+    return CRM_WPCiviRules_Upgrader_Base::instance();
   }
 }
 
