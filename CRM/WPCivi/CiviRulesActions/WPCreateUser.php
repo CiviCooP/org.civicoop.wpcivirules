@@ -138,36 +138,51 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUser extends \CRM_Civirules_Action
         // Log to CiviRulesLogger
         $this->logAction($message, $this->triggerData, $logLevel);
 
-        // Create activity for contact, if possible (-> activity type should be added by extension)
-        try {
-            switch($actionResult) {
-                case self::ACTION_COMPLETED:
-                    $subject = 'Succesfully created a WordPress account';
-                    break;
-                case self::ACTION_NOT_REQUIRED:
-                    $subject = 'Contact already has a WordPress account';
-                    break;
-                case self::ACTION_CANCELLED:
-                    $subject = 'An error occurred creating a WordPress account';
-                    break;
-                default:
-                    $subject = 'Unknown action result for WPCreateUser';
-                    break;
-            }
+        // Create activity for contact, if possible
+        // (-> activity type and activity source contact currently configurable, could probably just as well be automatically added)
+        $params = $this->getActionParameters();
+        if(isset($params['activity_type_id']) && isset($params['activity_contact_id'])) {
+            try {
+                switch ($actionResult) {
+                    case self::ACTION_COMPLETED:
+                        $subject = 'Succesfully created a WordPress account';
+                        break;
+                    case self::ACTION_NOT_REQUIRED:
+                        $subject = 'Contact already has a WordPress account';
+                        break;
+                    case self::ACTION_CANCELLED:
+                        $subject = 'An error occurred creating a WordPress account';
+                        break;
+                    default:
+                        $subject = 'Unknown action result for WPCreateUser';
+                        break;
+                }
 
-            civicrm_api3('Activity', 'create', [
-                'activity_type_id' =>  'CiviRules_WPCreateUser_Result',
-                'status_id' => $actionResult,
-                'target_id' => $this->triggerData->getContactId(),
-                'subject' => $subject,
-                'details' => $message,
-            ]);
+                // Ah, when triggered in the background we need a source_contact_id...
+                $session = \CRM_Core_Session::singleton();
+                $sourceContactId = $session->getLoggedInContactID();
+                if(!$sourceContactId && isset($params['activity_contact_id'])) {
+                    $sourceContactId = $params['activity_contact_id'];
+                } else {
+                    throw new \CiviCRM_API3_Exception('WPCreateUser: running in the background, activity type is configured but activity source contact isn\'t.', 500);
+                }
 
-        } catch(\CiviCRM_API3_Exception $e) {
-            if($actionResult == self::ACTION_CANCELLED) {
-                $this->logAction('WPCreateUser: an error occurred while creating an activity for an error that occurred (' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
-            } else {
-                $this->logAction('WPCreateUser: action has succesfully run, but an error occurred while creating an activity (' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
+                // Create activity
+                civicrm_api3('Activity', 'create', [
+                    'activity_type_id'  => $params['activity_type_id'],
+                    'status_id'         => $actionResult,
+                    'source_contact_id' => $sourceContactId,
+                    'target_id'         => $this->triggerData->getContactId(),
+                    'subject'           => $subject,
+                    'details'           => $message,
+                ]);
+
+            } catch (\CiviCRM_API3_Exception $e) {
+                if ($actionResult == self::ACTION_CANCELLED) {
+                    $this->logAction('WPCreateUser: an error occurred while creating an activity for an error that occurred (' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
+                } else {
+                    $this->logAction('WPCreateUser: action has succesfully run, but an error occurred while creating an activity (' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
+                }
             }
         }
 
