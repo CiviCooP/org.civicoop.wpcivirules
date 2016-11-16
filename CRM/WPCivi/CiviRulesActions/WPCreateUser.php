@@ -28,25 +28,26 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUser extends \CRM_Civirules_Action
      */
     public function processAction(\CRM_Civirules_TriggerData_TriggerData $triggerData)
     {
+        $this->logAction('DEBUG: Starting WPCreateUser execution with trigger contact id ' . $triggerData->getContactId() . ' and action params ' . print_r($this->getActionParameters(), true) . '.', $triggerData, LogLevel::DEBUG);
+
         $this->triggerData = $triggerData;
         $ruleId = $this->ruleAction['rule_id'];
 
         if(!\CRM_WPCivi_Config::isWordPress()) {
-            $this->logWPAction('WPCreateUser: could not execute action, not running on WordPress!', 'error');
+            $this->logWPAction('WPCreateUser: could not execute action, not running on WordPress!', LogLevel::ERROR, static::ACTION_CANCELLED);
             return false;
         }
 
         $contactId = $triggerData->getContactId();
-        $actionParams = $this->getActionParameters(); // contains [wp_role]
+        $actionParams = $this->getActionParameters(); // should contain [wp_role, activity_type_id, activity_contact_id]
         // $groupData = $triggerData->getEntityData('GroupContact'); // [group_id|contact_id|status] - not needed here
 
         // ---------------------
         // Check for existing WP user
         try {
             $ufmatch = civicrm_api3('UFMatch', 'getsingle', ['contact_id' => $contactId]);
-            if($ufmatch && isset($ufmatch['uf_id'])) {
-                $this->logWPAction('WPCreateUser: no user created, contact already linked with WP user ' . $ufmatch['uf_id'] . ' (' . $ufmatch['uf_name'] . ')', LogLevel::INFO, static::ACTION_NOT_REQUIRED);
-                return true;
+            if($ufmatch && !empty($ufmatch['uf_id'])) {
+                return $this->logWPAction('WPCreateUser: no user created, contact already linked with WP user ' . $ufmatch['uf_id'] . ' (' . $ufmatch['uf_name'] . ')', LogLevel::INFO, static::ACTION_NOT_REQUIRED);
             }
         } catch(\CiviCRM_API3_Exception $e) {
             // No match, continuing
@@ -66,40 +67,47 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUser extends \CRM_Civirules_Action
             return $this->logWPAction('WPCreateUser: could not fetch contact record (' . $e->getMessage() . ').', LogLevel::WARNING, static::ACTION_CANCELLED);
         }
 
-        // Check if username (email) exists
-        if(username_exists($contact['email']) != false) {
-            return $this->logWPAction('WPCreateUser: a WP account with email address ' . $contact['email'] . ' already exists, but it is not linked with this contact.', LogLevel::WARNING, static::ACTION_CANCELLED);
-        }
+      // Set default password for new users: predictable hash that we'll also use in email templates
+      $defaultPassword = CRM_WPCivi_CiviRulesActions_WPCreateUserTokens::getDefaultPassword($contact['contact_id'], $contact['email']);
 
-        // Try to create WP user and set name, email, role
-        $userParams = [
-            'user_login' => $contact['email'],
-            'user_pass' => md5(mt_rand()),
-            'user_email' => $contact['email'],
-            'first_name' => $contact['first_name'],
-            'last_name' => $contact['last_name'],
-            'display_name' => $contact['display_name'],
-            'role' => $actionParams['wp_role'],
-        ];
-        $uf_id = wp_insert_user($userParams);
+      // Try to create WP user and set name, email, role
+      $userParams = [
+        'user_login'   => $contact['email'],
+        'user_email'   => $contact['email'],
+        'user_pass'    => $defaultPassword,
+        'first_name'   => $contact['first_name'],
+        'last_name'    => $contact['last_name'],
+        'display_name' => $contact['display_name'],
+        'role'         => $actionParams['wp_role'],
+      ];
 
-        if(empty($uf_id) || $uf_id instanceof \WP_Error) {
-            return $this->logWPAction('WPCreateUser: calling wp_insert_user failed for contact ' . $contactId . ' (parameters: ' . json_encode($userParams) . ').', LogLevel::ERROR, static::ACTION_CANCELLED);
-        }
+      // Check if username (email) exists -> if so, we'll update this user instead of creating a new one. Hope this fixes most issues with other plugins.
+      $existingUserID = username_exists($contact['email']);
+      if ($existingUserID != FALSE) {
+        $this->logAction('WPCreateUser: updating existing Wordpress user for email ' . $contact['email'] . ' instead of creating a new one... let\'s see what happens.', $this->triggerData, LogLevel::WARNING);
+        $userParams['ID'] = $existingUserID;
+      }
 
-        // Create UFMatch record (double check if this is not done automatically)
-        try {
-            $ufmatch = civicrm_api3('UFMatch', 'create', [
-                'contact_id' => $contactId,
-                'uf_id' => $uf_id,
-                'uf_name' => $contact['email'],
-            ]);
-        } catch(\CiviCRM_API3_Exception $e) {
-            return $this->logWPAction('WPCreateUser: WordPress account was created, but creating UFMatch record failed for contact_id ' . $contactId . ' and uf_id ' . $uf_id . ' (' . $e->getMessage() . ').', LogLevel::WARNING, static::ACTION_CANCELLED);
-        }
+      $this->logAction('DEBUG: Calling wp_insert_user for contact ' . $contactId . ' (parameters: ' . json_encode($userParams) . ').', $triggerData, LogLevel::INFO);
+      $uf_id = wp_insert_user($userParams);
 
-        // That should be all for now
-        return $this->logWPAction('WPCreateUser: created WP user ' . $uf_id . ' (' . $contact['email'] . ') with role "' . ucfirst($actionParams['wp_role']) . '".', LogLevel::INFO, static::ACTION_COMPLETED);
+      if (empty($uf_id) || $uf_id instanceof \WP_Error) {
+        return $this->logWPAction('WPCreateUser: calling wp_insert_user failed for contact ' . $contactId . ' (parameters: ' . json_encode($userParams) . '). ' . ($uf_id instanceof \WP_Error ? 'Error messages: ' . print_r($uf_id->get_error_messages(), TRUE) . '.' : ''), LogLevel::WARNING, static::ACTION_CANCELLED);
+      }
+
+      // Create UFMatch record (double check if this is not done automatically)
+      try {
+        $ufmatch = civicrm_api3('UFMatch', 'create', [
+          'contact_id' => $contactId,
+          'uf_id'      => $uf_id,
+          'uf_name'    => $contact['email'],
+        ]);
+      } catch (\CiviCRM_API3_Exception $e) {
+        return $this->logWPAction('WPCreateUser: WordPress account was created, but creating UFMatch record failed for contact_id ' . $contactId . ' and uf_id ' . $uf_id . ' (' . $e->getMessage() . ').', LogLevel::WARNING, static::ACTION_CANCELLED);
+      }
+
+      // That should be all for now
+      return $this->logWPAction('WPCreateUser: created WP user ' . $uf_id . ' (' . $contact['email'] . ') with role "' . ucfirst($actionParams['wp_role']) . '".', LogLevel::INFO, static::ACTION_COMPLETED);
     }
 
     /**
@@ -141,6 +149,7 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUser extends \CRM_Civirules_Action
         // Create activity for contact, if possible
         // (-> activity type and activity source contact currently configurable, could probably just as well be automatically added)
         $params = $this->getActionParameters();
+
         if(isset($params['activity_type_id']) && isset($params['activity_contact_id'])) {
             try {
                 switch ($actionResult) {
@@ -161,10 +170,8 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUser extends \CRM_Civirules_Action
                 // Ah, when triggered in the background we need a source_contact_id...
                 $session = \CRM_Core_Session::singleton();
                 $sourceContactId = $session->getLoggedInContactID();
-                if(!$sourceContactId && isset($params['activity_contact_id'])) {
-                    $sourceContactId = $params['activity_contact_id'];
-                } else {
-                    throw new \CiviCRM_API3_Exception('WPCreateUser: running in the background, activity type is configured but activity source contact isn\'t.', 500);
+                if(!$sourceContactId) {
+                  $sourceContactId = 1; // Meer gedoe dan nut met configureerbare cid hiervoor
                 }
 
                 // Create activity
@@ -179,9 +186,9 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUser extends \CRM_Civirules_Action
 
             } catch (\CiviCRM_API3_Exception $e) {
                 if ($actionResult == self::ACTION_CANCELLED) {
-                    $this->logAction('WPCreateUser: an error occurred while creating an activity for an error that occurred (' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
+                    $this->logAction('WPCreateUser: an error occurred while creating an activity for an error that occurred (contact id ' . $this->triggerData->getContactId() . ' - ' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
                 } else {
-                    $this->logAction('WPCreateUser: action has succesfully run, but an error occurred while creating an activity (' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
+                    $this->logAction('WPCreateUser: action has succesfully run, but an error occurred while creating an activity (contact id ' . $this->triggerData->getContactId() . ' - ' . $e->getMessage() . ').', $this->triggerData, LogLevel::WARNING);
                 }
             }
         }

@@ -13,7 +13,7 @@ class CRM_WPCivi_CiviRulesActions_Form_WPCreateUser extends \CRM_CivirulesAction
   /**
    * @var array Array of field names used in checks below
    */
-  private $_myFields = ['wp_role', 'activity_contact_id', 'activity_type_id'];
+  private $_myFields = ['wp_role', 'msg_template_id', 'activity_type_id', 'activity_contact_id'];
 
   /**
    * Build form
@@ -22,12 +22,15 @@ class CRM_WPCivi_CiviRulesActions_Form_WPCreateUser extends \CRM_CivirulesAction
   {
     $this->add('select', 'wp_role', ts('Assign WordPress Role'), $this->getWPRoleOptions(), true);
 
-    $this->addEntityRef('activity_type_id', ts('Activity Type'),
-        ['entity' => 'option_value',
-         'api' => ['params' => ['option_group_id' => 'activity_type']],
-         'select' => ['minimumInputLength' => 0],
-        ]);
-    $this->addEntityRef('activity_contact_id', ts('Activity Source Contact'));
+    /* Gekmakend: waarom werkt onderstaande niet? (Nu niet absoluut nodig, maar...)
+       $this->add('select', 'msg_template_id', ts('Account Email Template (optional)'), $this->getMessageTemplates(), true);
+    */
+
+    $this->addEntityRef('activity_type_id', ts('Activity Type'), [
+      'entity' => 'option_value',
+      'api'    => ['params' => ['option_group_id' => 'activity_type']],
+      'select' => ['minimumInputLength' => 0],
+    ], true);
 
     $this->add('hidden', 'rule_action_id');
     $this->addButtons([['type' => 'submit', 'name' => ts('Submit'), 'isDefault' => true ]]);
@@ -57,7 +60,7 @@ class CRM_WPCivi_CiviRulesActions_Form_WPCreateUser extends \CRM_CivirulesAction
    * Get an array of available WordPress Roles
    * @return array Roles
    */
-  private function getWPRoleOptions()
+  public function getWPRoleOptions()
   {
     $editable_roles = array_reverse(get_editable_roles());
     $options = [];
@@ -66,6 +69,19 @@ class CRM_WPCivi_CiviRulesActions_Form_WPCreateUser extends \CRM_CivirulesAction
       $options[$role] = $details['name'];
     }
     return $options;
+  }
+
+  /**
+   * Get an array of available message templates (borrowed from org.civicoop.emailapi, addEntityRef doesn't work for this?)
+   * @return array
+   */
+  public function getMessageTemplates() {
+    $return = array('' => ts('-- none --'));
+    $dao = CRM_Core_DAO::executeQuery("SELECT * FROM `civicrm_msg_template` WHERE `is_active` = 1 AND `workflow_id` IS NULL");
+    while($dao->fetch()) {
+      $return[$dao->id] = $dao->msg_title;
+    }
+    return $return;
   }
 
   /**

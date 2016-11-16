@@ -3,6 +3,28 @@
 require_once 'wpcivirules.civix.php';
 
 /**
+ * Implements hook_civicrm_tokens().
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_tokens
+ * @param array $tokens
+ */
+function wpcivirules_civicrm_tokens(&$tokens) {
+  \CRM_WPCivi_CiviRulesActions_WPCreateUserTokens::addTokens($tokens);
+}
+
+/**
+ * Implements hook_civicrm_tokenValues().
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_tokenValues
+ * @param array $values
+ * @param array $cids
+ * @param mixed $job
+ * @param array $tokens
+ * @param mixed $context
+ */
+function wpcivirules_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = [], $context = null) {
+  \CRM_WPCivi_CiviRulesActions_WPCreateUserTokens::addTokenValues($values, $cids, $tokens);
+}
+
+/**
  * Implements hook_civicrm_config().
  *
  * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_config
@@ -121,18 +143,3 @@ _wpcivirules_civix_civicrm_angularModules($angularModules);
 function wpcivirules_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
   _wpcivirules_civix_civicrm_alterSettingsFolders($metaDataFolders);
 }
-
-/**
- * Functions below this ship commented out. Uncomment as required.
- *
-
-/**
- * Implements hook_civicrm_preProcess().
- *
- * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_preProcess
- *
-function wpcivirules_civicrm_preProcess($formName, &$form) {
-
-}
-
-*/
