@@ -8,16 +8,16 @@
 class CRM_WPCivi_CiviRulesActions_WPCreateUserTokens {
 
   public static function addTokens(&$tokens) {
-    if(!isset($tokens['jourcoop'])) {
-      $tokens['jourcoop'] = [];
+    if(!isset($tokens['wpcivirules'])) {
+      $tokens['wpcivirules'] = [];
     }
-    $tokens['jourcoop']['jourcoop.uf_username'] = ts('WordPress Username');
-    $tokens['jourcoop']['jourcoop.uf_password'] = ts('WordPress Default Password');
+    $tokens['wpcivirules']['wpcivirules.uf_username'] = ts('WordPress Username');
+    $tokens['wpcivirules']['wpcivirules.uf_password'] = ts('WordPress Default Password');
   }
 
   public static function addTokenValues(&$values, $cids, $tokens = []) {
 
-    if(!empty($tokens['jourcoop'])) {
+    if(!empty($tokens['wpcivirules'])) {
 
       // Get UFMatch records (esp. WP usernames) for all contact ids
       $ufmatch = civicrm_api3('UFMatch', 'get', [
@@ -37,14 +37,14 @@ class CRM_WPCivi_CiviRulesActions_WPCreateUserTokens {
 
         // No UFMatch record found
         if(!isset($uf_usernames[$cid])) {
-          $values[$cid]['jourcoop.uf_username'] = '[ERROR:NO-ACCOUNT]';
-          $values[$cid]['jourcoop.uf_password'] = '-';
+          $values[$cid]['wpcivirules.uf_username'] = '[' . ts('No account created') . ']';
+          $values[$cid]['wpcivirules.uf_password'] = '';
           continue;
         }
 
         // UFMatch found, set tokens
-        $values[$cid]['jourcoop.uf_username'] = $uf_usernames[$cid];
-        $values[$cid]['jourcoop.uf_password'] = self::getDefaultPassword($cid, $uf_usernames[$cid]);
+        $values[$cid]['wpcivirules.uf_username'] = $uf_usernames[$cid];
+        $values[$cid]['wpcivirules.uf_password'] = self::getDefaultPassword($cid, $uf_usernames[$cid]);
       }
     }
   }
