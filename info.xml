@@ -25,8 +25,13 @@
     <ext>org.civicoop.civirules</ext>
     <ext>org.civicoop.civiruleslogger</ext>
   </requires>
-  <comments></comments>
+  <comments/>
   <civix>
     <namespace>CRM/WPCiviRules</namespace>
+    <format>22.05.2</format>
   </civix>
+  <mixins>
+    <mixin>menu-xml@1.0.0</mixin>
+    <mixin>mgd-php@1.0.0</mixin>
+  </mixins>
 </extension>
